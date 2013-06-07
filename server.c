@@ -106,12 +106,25 @@ static int create_sock(int port)
 
 
 static void handle_read(int client_fd, struct io_data_t * client_data_ptr){
+    fprintf(stderr, "handle_read called!\n"); 
+    int ret = 0;
     
+    ret = read(client_fd, client_data_ptr->in_buf, 4096);
+    fprintf(stderr, "recv %d byte!\n", ret);
+    
+    ev.data.ptr = client_data_ptr;
+    ev.data.fd = client_fd;
+    ev.events = EPOLLOUT | EPOLLET;
+    if(epoll_ctl(epoll_fd, EPOLL_CTL_MOD, client_fd, &ev) == -1){
+      perror("epoll_ctl: mod");
+      exit(-1);
+    }
 }
 
 
 static void handle_write(int client_fd, struct io_data_t * client_data_ptr){
-    char * msg = "hello there.";
+    fprintf(stderr, "handle_write called!\n"); 
+    char * msg = "hello there.\n";
     int ret = write(client_fd, (void *)msg, sizeof(msg));
 }
 
@@ -180,16 +193,15 @@ int main(int argc, char **argv)
                             perror("accept failed!");
                             
                         }
-			continue;
                     }
                 }
-                
+		continue;
             }
             
             //fprintf(stderr, "client sock!\n");
             /* 如果是client socket */
             client_io_ptr = (struct io_data_t *)events[i].data.ptr;
-	    fprintf(stderr, "client_io_ptr: %d\n", client_io_ptr->fd);
+	    fprintf(stderr, "client_io_ptr->fd: %d\n", client_io_ptr->fd);
             if(client_io_ptr->fd <= 0) continue;
             
             if(events[i].events & EPOLLIN) {
