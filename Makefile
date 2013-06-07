@@ -2,4 +2,4 @@ all:
 	gcc -O2 -o server server.c
 
 debug:
-	$(all)
+	gcc -o server server.c -g

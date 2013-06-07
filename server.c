@@ -75,13 +75,13 @@ static void set_nonblocking(int fd){
 
 static int create_sock(int port)
 {
+    int on = 1;
     listen_sock = socket(AF_INET, SOCK_STREAM, 0);
     if (listen_sock == -1)
     {
         perror("create socket failed!");
     }
-    
-    setsockopt(listen_sock, SOL_SOCKET, SO_REUSEADDR, (void *) 1, sizeof(int));
+    setsockopt(listen_sock, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(int));
     setsockopt(listen_sock, IPPROTO_TCP, TCP_NODELAY, (int[]) {1}, sizeof(int));
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
@@ -111,7 +111,8 @@ static void handle_read(int client_fd, struct io_data_t * client_data_ptr){
 
 
 static void handle_write(int client_fd, struct io_data_t * client_data_ptr){
-    
+    char * msg = "hello there.";
+    int ret = write(client_fd, (void *)msg, sizeof(msg));
 }
 
 
@@ -121,12 +122,13 @@ static void clear_all(int epoll_fd, int client_fd, struct io_data_t * client_dat
 
 int main(int argc, char **argv)
 {   
-    if(argc == 1){
-        printf("need more argument!\n");
-        return 1;
-    }
+    //if(argc == 1){
+    //    printf("need more argument!\n");
+    //    return 1;
+    //}
     
-    int port = atoi(argv[1]);
+    //int port = atoi(argv[1]);
+    int port = 1234;
     int i, addrlen, client_fd;
     struct io_data_t *client_io_ptr;
     
@@ -154,15 +156,19 @@ int main(int argc, char **argv)
             exit(-1);
         }
         
-        for(i=0; i<nfds; ++i){
+        for(i=0; i<nfds && nfds>0; ++i){
             /* 如果是listen socket */
             if(events[i].data.fd == listen_sock){
+	      //fprintf(stderr, "listen sock!\n");
                 
                 while((conn_sock = accept(listen_sock, (struct sockaddr *)&server_addr, (socklen_t *)&addrlen)) > 0){
                     set_nonblocking(conn_sock);
-                    ev.data.ptr = alloc_io_data(conn_sock, (struct sockaddr_in *)NULL);
+		    fprintf(stderr, "conn_sock: %d\n", conn_sock);
+                    struct io_data_t *ptr = alloc_io_data(conn_sock, (struct sockaddr_in *)NULL);
+		    fprintf(stderr, "ptr: %d\n", ptr->fd);
+		    ev.data.ptr = ptr;
                     ev.events = EPOLLIN | EPOLLET;
-                    ev.data.fd = conn_sock;
+                    //ev.data.fd = conn_sock;
                     if(epoll_ctl(epoll_fd, EPOLL_CTL_ADD, conn_sock, &ev) == -1){
                         perror("epoll_ctl add failed!");
                         exit(-1);
@@ -174,20 +180,23 @@ int main(int argc, char **argv)
                             perror("accept failed!");
                             
                         }
+			continue;
                     }
                 }
                 
             }
             
+            //fprintf(stderr, "client sock!\n");
             /* 如果是client socket */
             client_io_ptr = (struct io_data_t *)events[i].data.ptr;
-            if(client_io_ptr->fd <=0) continue;
+	    fprintf(stderr, "client_io_ptr: %d\n", client_io_ptr->fd);
+            if(client_io_ptr->fd <= 0) continue;
             
             if(events[i].events & EPOLLIN) {
-                handle_read(conn_sock, client_io_ptr);
+                handle_read(client_io_ptr->fd, client_io_ptr);
                 
             } else if(events[i].events & EPOLLOUT) {
-                handle_write(conn_sock, client_io_ptr);
+                handle_write(client_io_ptr->fd, client_io_ptr);
                 
             } else if(events[i].events & EPOLLERR) {
                 client_fd = client_io_ptr->fd;
