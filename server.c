@@ -121,16 +121,17 @@ static void handle_read(int client_fd, struct io_data_t * client_data_ptr){
     
     while((nread = read(client_fd, client_data_ptr->in_buf + client_data_ptr->in_buf_cur, BUFSIZE-1)) > 0) {
         client_data_ptr->in_buf_cur += nread;
-        if (nread == 0 || (nread == -1 && errno != EAGAIN)) {
-            perror("read error");
-            close(client_fd);
-            return;
-        }
+    }
+    
+    if (nread ==0 || (nread == -1 && errno != EAGAIN)) {
+        perror("read error");
+        close(client_fd);
+        return;
     }
     
     client_data_ptr->in_buf[client_data_ptr->in_buf_cur] = '\0';
     
-    fprintf(stderr, "recv %d byte!\n", client_data_ptr->in_buf_cur);
+    fprintf(stderr, "recv %d byte: %s\n", client_data_ptr->in_buf_cur, client_data_ptr->in_buf);
     
     // start handle request
     strncpy(client_data_ptr->out_buf, client_data_ptr->in_buf, client_data_ptr->in_buf_cur);
@@ -158,7 +159,7 @@ static void handle_write(int client_fd, struct io_data_t * client_data_ptr){
         client_data_ptr->out_buf_cur -= nwrite;
         
         if(nwrite < client_data_ptr->out_buf_cur) {
-            if(nwrite == 0 || (nwrite == -1 && errno != EAGAIN)) {
+            if(nwrite == -1 && errno != EAGAIN) {
                 perror("write error");
                 close(client_fd);
                 return;
@@ -226,15 +227,15 @@ int main(int argc, char **argv)
         
         for(i=0; i<nfds && nfds>0; ++i){
             /* 如果是listen socket */
-            if(events[i].data.fd == listen_sock){
-	      fprintf(stderr, "listen sock!\n");
+        if(events[i].data.fd == listen_sock){
+            fprintf(stderr, "listen sock!\n");
                 
-                while((conn_sock = accept(listen_sock, (struct sockaddr *)&server_addr, (socklen_t *)&addrlen)) > 0){
+            while((conn_sock = accept(listen_sock, (struct sockaddr *)&server_addr, (socklen_t *)&addrlen)) > 0){
                     set_nonblocking(conn_sock);
-		    fprintf(stderr, "conn_sock: %d\n", conn_sock);
+                    fprintf(stderr, "conn_sock: %d\n", conn_sock);
                     struct io_data_t *ptr = alloc_io_data(conn_sock, (struct sockaddr_in *)NULL);
-		    fprintf(stderr, "ptr: %d\n", ptr->fd);
-		    ev.data.ptr = ptr;
+                    //fprintf(stderr, "ptr: %d\n", ptr->fd);
+                    ev.data.ptr = ptr;
                     ev.events = EPOLLIN | EPOLLET;
                     if(epoll_ctl(epoll_fd, EPOLL_CTL_ADD, conn_sock, &ev) == -1){
                         perror("epoll_ctl add failed!");
@@ -249,13 +250,13 @@ int main(int argc, char **argv)
                         }
                     }
                 }
-		continue;
+                continue;
             }
             
             fprintf(stderr, "client sock!\n");
             /* 如果是client socket */
             client_io_ptr = (struct io_data_t *)events[i].data.ptr;
-	    fprintf(stderr, "client_io_ptr->fd: %d\n", client_io_ptr->fd);
+            //fprintf(stderr, "client_io_ptr->fd: %d\n", client_io_ptr->fd);
             if(client_io_ptr->fd <= 0) continue;
             
             if(events[i].events & EPOLLIN) {
