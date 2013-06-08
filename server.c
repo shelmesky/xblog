@@ -150,6 +150,13 @@ static void handle_write(int client_fd, struct io_data_t * client_data_ptr){
     while(client_data_ptr->out_buf_cur >0){
         nwrite = write(client_fd, client_data_ptr->out_buf, client_data_ptr->out_buf_cur);
         client_data_ptr->out_buf_cur -= nwrite;
+        
+        if(nwrite < client_data_ptr->out_buf_cur) {
+            if(nwrite == -1 && errno != EAGAIN) {
+                perror("write error");
+            }
+            break;
+        }
     }
     
     ev.data.ptr = client_data_ptr;
