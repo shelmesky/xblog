@@ -46,6 +46,12 @@ struct io_data_t {
 };
 
 
+void exit_hook(int number){
+    close(listen_sock);
+    fprintf(stderr, "[%d]will shutdown...[%d]\n", getpid(), number);
+}
+
+
 static struct io_data_t * alloc_io_data(int client_fd, struct sockaddr_in *client_addr)
 {
     struct io_data_t * io_data_ptr = (struct io_data_t *)malloc(sizeof(struct io_data_t));
@@ -65,13 +71,13 @@ static void set_nonblocking(int fd){
     int opts;
     opts = fcntl(fd, F_GETFL);
     if(opts < 0) {
-        fprintf(stderr, "fcntl failed!");
+        fprintf(stderr, "fcntl failed!\n");
         return;
     }
     
     opts = opts | O_NONBLOCK;
     if(fcntl(fd, F_SETFL, opts) < 0) {
-        fprintf(stderr, "fcntl failed!");
+        fprintf(stderr, "fcntl failed!\n");
         return;
     }
 }
@@ -115,11 +121,11 @@ static void handle_read(int client_fd, struct io_data_t * client_data_ptr){
     
     while((nread = read(client_fd, client_data_ptr->in_buf + client_data_ptr->in_buf_cur, BUFSIZE-1)) > 0) {
         client_data_ptr->in_buf_cur += nread;
-    }
-    if (nread == -1 && errno != EAGAIN) {
-        perror("read error");
-        close(client_fd);
-        return;
+        if (nread == 0 || (nread == -1 && errno != EAGAIN)) {
+            perror("read error");
+            close(client_fd);
+            return;
+        }
     }
     
     client_data_ptr->in_buf[client_data_ptr->in_buf_cur] = '\0';
@@ -152,8 +158,10 @@ static void handle_write(int client_fd, struct io_data_t * client_data_ptr){
         client_data_ptr->out_buf_cur -= nwrite;
         
         if(nwrite < client_data_ptr->out_buf_cur) {
-            if(nwrite == -1 && errno != EAGAIN) {
+            if(nwrite == 0 || (nwrite == -1 && errno != EAGAIN)) {
                 perror("write error");
+                close(client_fd);
+                return;
             }
             break;
         }
@@ -184,6 +192,13 @@ int main(int argc, char **argv)
     int port = 1234;
     int i, addrlen, client_fd;
     struct io_data_t *client_io_ptr;
+    
+    signal(SIGPIPE, SIG_IGN);
+    signal(SIGINT, exit_hook);
+    signal(SIGKILL, exit_hook);
+    signal(SIGQUIT, exit_hook);
+    signal(SIGTERM, exit_hook);
+    signal(SIGHUP, exit_hook);
     
     create_sock(port);
     
