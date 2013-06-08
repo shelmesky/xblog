@@ -28,6 +28,7 @@
 
 
 #define MAX_EVENTS 10240
+#define BUFSIZE 4096
 
 struct epoll_event ev, events[MAX_EVENTS];
 struct sockaddr_in server_addr;
@@ -44,12 +45,13 @@ struct io_data_t {
     int keep_alive;
 };
 
+
 static struct io_data_t * alloc_io_data(int client_fd, struct sockaddr_in *client_addr)
 {
     struct io_data_t * io_data_ptr = (struct io_data_t *)malloc(sizeof(struct io_data_t));
     io_data_ptr->fd = client_fd;
-    io_data_ptr->in_buf = (char *)malloc(4096);
-    io_data_ptr->out_buf = (char *)malloc(4096);
+    io_data_ptr->in_buf = (char *)malloc(BUFSIZE);
+    io_data_ptr->out_buf = (char *)malloc(BUFSIZE);
     io_data_ptr->in_buf_cur = 0;
     io_data_ptr->out_buf_cur = 0;
     io_data_ptr->keep_alive = 1;
@@ -57,6 +59,7 @@ static struct io_data_t * alloc_io_data(int client_fd, struct sockaddr_in *clien
         io_data_ptr->addr = *client_addr;
     return io_data_ptr;
 }
+
 
 static void set_nonblocking(int fd){
     int opts;
@@ -72,6 +75,7 @@ static void set_nonblocking(int fd){
         return;
     }
 }
+
 
 static int create_sock(int port)
 {
@@ -106,14 +110,32 @@ static int create_sock(int port)
 
 
 static void handle_read(int client_fd, struct io_data_t * client_data_ptr){
-    fprintf(stderr, "handle_read called!\n"); 
-    int ret = 0;
+    fprintf(stderr, "handle_read called!\n");
+    int nread = 0;
     
-    ret = read(client_fd, client_data_ptr->in_buf, 4096);
-    fprintf(stderr, "recv %d byte!\n", ret);
+    while((nread = read(client_fd, client_data_ptr->in_buf + client_data_ptr->in_buf_cur, BUFSIZE-1)) > 0) {
+        client_data_ptr->in_buf_cur += nread;
+    }
+    if (nread == -1 && errno != EAGAIN) {
+        perror("read error");
+        close(client_fd);
+        return;
+    }
+    
+    client_data_ptr->in_buf[client_data_ptr->in_buf_cur] = '\0';
+    
+    fprintf(stderr, "recv %d byte!\n", client_data_ptr->in_buf_cur);
+    
+    // start handle request
+    strncpy(client_data_ptr->out_buf, client_data_ptr->in_buf, client_data_ptr->in_buf_cur);
+    client_data_ptr->out_buf_cur += client_data_ptr->in_buf_cur;
+    // end handle request
+    
+    //fprintf(stderr, "handle_read/fd: %d\n", client_data_ptr->fd);
     
     ev.data.ptr = client_data_ptr;
-    ev.data.fd = client_fd;
+    //如果设置了data.ptr，events则只返回ptr，不会返回fd
+    //ev.data.fd = client_fd;
     ev.events = EPOLLOUT | EPOLLET;
     if(epoll_ctl(epoll_fd, EPOLL_CTL_MOD, client_fd, &ev) == -1){
       perror("epoll_ctl: mod");
@@ -124,14 +146,25 @@ static void handle_read(int client_fd, struct io_data_t * client_data_ptr){
 
 static void handle_write(int client_fd, struct io_data_t * client_data_ptr){
     fprintf(stderr, "handle_write called!\n"); 
-    char * msg = "hello there.\n";
-    int ret = write(client_fd, (void *)msg, sizeof(msg));
+    int nwrite;
+    while(client_data_ptr->out_buf_cur >0){
+        nwrite = write(client_fd, client_data_ptr->out_buf, client_data_ptr->out_buf_cur);
+        client_data_ptr->out_buf_cur -= nwrite;
+    }
+    
+    ev.data.ptr = client_data_ptr;
+    ev.events = EPOLLIN | EPOLLET;
+    if(epoll_ctl(epoll_fd, EPOLL_CTL_MOD, client_fd, &ev) == -1) {
+        perror("epoll_ctl: mod");
+        exit(-1);
+    }
 }
 
 
 static void clear_all(int epoll_fd, int client_fd, struct io_data_t * client_data_ptr) {
     
 }
+
 
 int main(int argc, char **argv)
 {   
@@ -172,7 +205,7 @@ int main(int argc, char **argv)
         for(i=0; i<nfds && nfds>0; ++i){
             /* 如果是listen socket */
             if(events[i].data.fd == listen_sock){
-	      //fprintf(stderr, "listen sock!\n");
+	      fprintf(stderr, "listen sock!\n");
                 
                 while((conn_sock = accept(listen_sock, (struct sockaddr *)&server_addr, (socklen_t *)&addrlen)) > 0){
                     set_nonblocking(conn_sock);
@@ -181,7 +214,6 @@ int main(int argc, char **argv)
 		    fprintf(stderr, "ptr: %d\n", ptr->fd);
 		    ev.data.ptr = ptr;
                     ev.events = EPOLLIN | EPOLLET;
-                    //ev.data.fd = conn_sock;
                     if(epoll_ctl(epoll_fd, EPOLL_CTL_ADD, conn_sock, &ev) == -1){
                         perror("epoll_ctl add failed!");
                         exit(-1);
@@ -198,7 +230,7 @@ int main(int argc, char **argv)
 		continue;
             }
             
-            //fprintf(stderr, "client sock!\n");
+            fprintf(stderr, "client sock!\n");
             /* 如果是client socket */
             client_io_ptr = (struct io_data_t *)events[i].data.ptr;
 	    fprintf(stderr, "client_io_ptr->fd: %d\n", client_io_ptr->fd);
