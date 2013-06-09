@@ -1,7 +1,42 @@
-#include "parse.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#define MAX_HEAD_SIZE 4096
+
+char * HTTP_VERSION = "HTTP/1.1";
+char * SERVER_NAME_FILED = "Server: ";
+char * SERVER_NAME = "Xblog Server 1.0";
+char * CONTENT_TYPE_FILED = "Content-Type: ";
+char * DATE_FILED = "Date: ";
+char * CONTENT_LENGTH_FIELD = "Content-Length: ";
+
+typedef struct request_header_s{
+    int method;
+    char * uri;
+    char * version;
+        char * host;
+        char * connecton;
+        char * accept;
+        char * user_agent;
+        char * accept_encoding;
+        char * accept_charset;
+        char * cookie;
+}request_header_t;
+
+
+typedef struct response_header_s{
+    char * status;
+    char * content_type;
+    char * date;
+    char * content_length;
+}response_header_t;
+
+
+typedef struct response_content_s{
+    char * raw;
+    int length;
+}response_content_t;
 
 
 request_header_t * parse_request(char * buffer){
