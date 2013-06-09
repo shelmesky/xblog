@@ -25,6 +25,7 @@
 #include <sys/epoll.h>
 #include <pthread.h>
 #include <errno.h>
+#include "parse.h"
 
 
 #define MAX_EVENTS 10240
@@ -114,6 +115,25 @@ static int create_sock(int port)
     return listen_sock;
 }
 
+static struct io_data_t * process_request(struct io_data_t * client_data_ptr){
+    static char * body = "hello server";
+    response_header_t * resp_header = (response_header_t *)malloc(sizeof(response_header_t));
+    char * content_length = (char *)malloc(16);
+    sprintf(content_length, "%d", (int)strlen(body));
+    resp_header->content_length = content_length;
+    resp_header->status = "200 OK";
+    resp_header->content_type = "text/html";
+    response_content_t * resp_content = make_response(resp_header);
+
+    strncat(client_data_ptr->out_buf, resp_content->raw, resp_content->length);
+    client_data_ptr->out_buf_cur += resp_content->length;
+    
+    strncat(client_data_ptr->out_buf, body, strlen(body));
+    client_data_ptr->out_buf_cur += strlen(body);
+    
+    return client_data_ptr;
+}
+
 
 static void handle_read(int client_fd, struct io_data_t * client_data_ptr){
     fprintf(stderr, "handle_read called!\n");
@@ -132,15 +152,14 @@ static void handle_read(int client_fd, struct io_data_t * client_data_ptr){
     client_data_ptr->in_buf[client_data_ptr->in_buf_cur] = '\0';
     
     fprintf(stderr, "recv %d byte: %s\n", client_data_ptr->in_buf_cur, client_data_ptr->in_buf);
-    
     // start handle request
-    strncpy(client_data_ptr->out_buf, client_data_ptr->in_buf, client_data_ptr->in_buf_cur);
-    client_data_ptr->out_buf_cur += client_data_ptr->in_buf_cur;
+    //strncpy(client_data_ptr->out_buf, client_data_ptr->in_buf, client_data_ptr->in_buf_cur);
+    //client_data_ptr->out_buf_cur += client_data_ptr->in_buf_cur;
     // end handle request
     
     //fprintf(stderr, "handle_read/fd: %d\n", client_data_ptr->fd);
     
-    ev.data.ptr = client_data_ptr;
+    ev.data.ptr = (void *)process_request(client_data_ptr);
     //如果设置了data.ptr，events则只返回ptr，不会返回fd
     //ev.data.fd = client_fd;
     ev.events = EPOLLOUT | EPOLLET;
@@ -167,6 +186,8 @@ static void handle_write(int client_fd, struct io_data_t * client_data_ptr){
             break;
         }
     }
+    
+    fprintf(stderr, "write %d bytes: %s\n", nwrite, client_data_ptr->out_buf);
     
     ev.data.ptr = client_data_ptr;
     ev.events = EPOLLIN | EPOLLET;
