@@ -32,7 +32,7 @@
 #define BUFSIZE 4096
 
 
-char * HTTP_VERSION = "HTTP/1.1";
+char * HTTP_VERSION = "HTTP/1.1 ";
 char * SERVER_NAME_FILED = "Server: ";
 char * SERVER_NAME = "Xblog Server 1.0";
 char * CONTENT_TYPE_FILED = "Content-Type: ";
@@ -84,6 +84,16 @@ struct sockaddr_in server_addr;
 int listen_sock, conn_sock, nfds, epoll_fd;
 
 
+static void add_LF(char * buf){
+    strcat(buf, "\r\n");
+}
+
+
+static void add_CRLF(char * buf){
+    strcat(buf, "\r\n\r\n");
+}
+
+
 request_header_t * parse_request(char * buffer){
     
 }
@@ -93,11 +103,23 @@ response_content_t * make_response(response_header_t * resp_header){
     char * resp = (char *)malloc(MAX_HEAD_SIZE);
     response_content_t * resp_content = (response_content_t *)malloc(sizeof(response_content_t));
     char * content_length_str = (char *)malloc(sizeof(char));
+    
     strcat(resp, HTTP_VERSION);
     strcat(resp, resp_header->status);
-    strcat(resp, strcat(SERVER_NAME_FILED, SERVER_NAME));
-    strcat(resp, strcat(CONTENT_TYPE_FILED, resp_header->content_type));
-    strcat(resp, strcat(CONTENT_LENGTH_FIELD, resp_header->content_length));
+    add_LF(resp);
+    
+    strcat(resp, SERVER_NAME_FILED);
+    strcat(resp, SERVER_NAME);
+    add_LF(resp);
+    
+    strcat(resp, CONTENT_TYPE_FILED);
+    strcat(resp, resp_header->content_type);
+    add_LF(resp);
+    
+    strcat(resp, CONTENT_LENGTH_FIELD);
+    strcat(resp, resp_header->content_length);
+    add_CRLF(resp);
+    
     resp_content->raw = resp;
     resp_content->length = strlen(resp);
     return resp_content;
