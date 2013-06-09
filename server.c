@@ -26,8 +26,11 @@
 #include <pthread.h>
 #include <errno.h>
 
-/////////////////////////////////////////////
+
 #define MAX_HEAD_SIZE 4096
+#define MAX_EVENTS 10240
+#define BUFSIZE 4096
+
 
 char * HTTP_VERSION = "HTTP/1.1";
 char * SERVER_NAME_FILED = "Server: ";
@@ -35,6 +38,7 @@ char * SERVER_NAME = "Xblog Server 1.0";
 char * CONTENT_TYPE_FILED = "Content-Type: ";
 char * DATE_FILED = "Date: ";
 char * CONTENT_LENGTH_FIELD = "Content-Length: ";
+
 
 typedef struct request_header_s{
     int method;
@@ -62,6 +66,22 @@ typedef struct response_content_s{
     char * raw;
     int length;
 }response_content_t;
+ 
+
+struct io_data_t {
+    int fd;
+    struct sockaddr_in addr;
+    char * in_buf;
+    char * out_buf;
+    int in_buf_cur;
+    int out_buf_cur;
+    int keep_alive;
+};
+
+
+struct epoll_event ev, events[MAX_EVENTS];
+struct sockaddr_in server_addr;
+int listen_sock, conn_sock, nfds, epoll_fd;
 
 
 request_header_t * parse_request(char * buffer){
@@ -82,26 +102,6 @@ response_content_t * make_response(response_header_t * resp_header){
     resp_content->length = strlen(resp);
     return resp_content;
 }
-/////////////////////////////////////////////
-
-
-#define MAX_EVENTS 10240
-#define BUFSIZE 4096
-
-struct epoll_event ev, events[MAX_EVENTS];
-struct sockaddr_in server_addr;
-int listen_sock, conn_sock, nfds, epoll_fd;
-
-
-struct io_data_t {
-    int fd;
-    struct sockaddr_in addr;
-    char * in_buf;
-    char * out_buf;
-    int in_buf_cur;
-    int out_buf_cur;
-    int keep_alive;
-};
 
 
 void exit_hook(int number){
