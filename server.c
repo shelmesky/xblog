@@ -38,6 +38,7 @@ char * SERVER_NAME = "Xblog Server 1.0";
 char * CONTENT_TYPE_FILED = "Content-Type: ";
 char * DATE_FILED = "Date: ";
 char * CONTENT_LENGTH_FIELD = "Content-Length: ";
+char * CONNECTION_FIELD = "Connection: ";
 
 
 typedef struct request_header_s{
@@ -59,6 +60,7 @@ typedef struct response_header_s{
     char * content_type;
     char * date;
     char * content_length;
+    char * connecton;
 }response_header_t;
 
 
@@ -118,6 +120,10 @@ response_content_t * make_response(response_header_t * resp_header){
     
     strcat(resp, CONTENT_LENGTH_FIELD);
     strcat(resp, resp_header->content_length);
+    add_LF(resp);
+    
+    strcat(resp, CONNECTION_FIELD);
+    strcat(resp, resp_header->connecton);
     add_CRLF(resp);
     
     resp_content->raw = resp;
@@ -195,6 +201,8 @@ static int create_sock(int port)
 }
 
 static struct io_data_t * process_request(struct io_data_t * client_data_ptr){
+    
+    client_data_ptr->out_buf_cur = 0;
     static char * body = "hello server";
     response_header_t * resp_header = (response_header_t *)malloc(sizeof(response_header_t));
     char * content_length = (char *)malloc(16);
@@ -202,6 +210,7 @@ static struct io_data_t * process_request(struct io_data_t * client_data_ptr){
     resp_header->content_length = content_length;
     resp_header->status = "200 OK";
     resp_header->content_type = "text/html";
+    resp_header->connecton = "keep-alive";
     response_content_t * resp_content = make_response(resp_header);
 
     strncat(client_data_ptr->out_buf, resp_content->raw, resp_content->length);
@@ -230,6 +239,15 @@ static void handle_read(int client_fd, struct io_data_t * client_data_ptr){
     
     client_data_ptr->in_buf[client_data_ptr->in_buf_cur] = '\0';
     
+    char * sep = NULL;
+    if((sep=strstr(client_data_ptr->in_buf, CRLF)) != NULL){
+        char * request_content=(char *)malloc(MAX_HEAD_SIZE);
+        memcpy(request_content, client_data_ptr->in_buf, client_data_ptr->in_buf_cur);
+        printf("");
+        client_data_ptr->in_buf_cur += 
+    }
+    
+    //fprintf(stderr, "Recv %d byte\n", client_data_ptr->in_buf_cur);
     fprintf(stderr, "recv %d byte: %s\n", client_data_ptr->in_buf_cur, client_data_ptr->in_buf);
     // start handle request
     //strncpy(client_data_ptr->out_buf, client_data_ptr->in_buf, client_data_ptr->in_buf_cur);
@@ -251,6 +269,7 @@ static void handle_read(int client_fd, struct io_data_t * client_data_ptr){
 
 static void handle_write(int client_fd, struct io_data_t * client_data_ptr){
     fprintf(stderr, "handle_write called!\n"); 
+    fprintf(stderr, "Before write buffer size: %d\n", client_data_ptr->out_buf_cur);
     int nwrite;
     while(client_data_ptr->out_buf_cur >0){
         nwrite = write(client_fd, client_data_ptr->out_buf, client_data_ptr->out_buf_cur);
@@ -266,7 +285,11 @@ static void handle_write(int client_fd, struct io_data_t * client_data_ptr){
         }
     }
     
-    fprintf(stderr, "write %d bytes: %s\n", nwrite, client_data_ptr->out_buf);
+    fprintf(stderr, "After write buffer size: %d\n", client_data_ptr->out_buf_cur);
+    //fprintf(stderr, "write %d bytes: %s\n", nwrite, client_data_ptr->out_buf);
+    
+    close(client_fd);
+    return;
     
     ev.data.ptr = client_data_ptr;
     ev.events = EPOLLIN | EPOLLET;
@@ -278,7 +301,8 @@ static void handle_write(int client_fd, struct io_data_t * client_data_ptr){
 
 
 static void clear_all(int epoll_fd, int client_fd, struct io_data_t * client_data_ptr) {
-    
+    close(epoll_fd);
+    close(client_fd);
 }
 
 
