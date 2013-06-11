@@ -30,7 +30,14 @@
 #define MAX_HEAD_SIZE 4096
 #define MAX_EVENTS 10240
 #define BUFSIZE 4096
+#define GET 0
+#define POST 1
+#define PUT 2
+#define DELETE 3
 
+
+static const char * LF = "\r\n";
+static const char * CRLF = "\r\n\r\n";
 
 char * HTTP_VERSION = "HTTP/1.1 ";
 char * SERVER_NAME_FILED = "Server: ";
@@ -45,13 +52,16 @@ typedef struct request_header_s{
     int method;
     char * uri;
     char * version;
-        char * host;
-        char * connecton;
-        char * accept;
-        char * user_agent;
-        char * accept_encoding;
-        char * accept_charset;
-        char * cookie;
+    char * host;
+    char * connecton;
+    char * accept;
+    char * user_agent;
+    char * accept_encoding;
+    char * accept_charset;
+    char * cookie;
+    int content_length;
+    char * content_type;
+    char * content;
 }request_header_t;
 
 
@@ -87,17 +97,19 @@ int listen_sock, conn_sock, nfds, epoll_fd;
 
 
 static void add_LF(char * buf){
-    strcat(buf, "\r\n");
+    strcat(buf, LF);
 }
 
 
 static void add_CRLF(char * buf){
-    strcat(buf, "\r\n\r\n");
+    strcat(buf, CRLF);
 }
 
 
 request_header_t * parse_request(char * buffer){
-    
+    request_header_t * request = (request_header_t *)malloc(sizeof(request_header_t));
+    fprintf(stderr, "\nGet request content: \n%s\n\n", buffer);
+    return request;
 }
 
 
@@ -240,21 +252,17 @@ static void handle_read(int client_fd, struct io_data_t * client_data_ptr){
     client_data_ptr->in_buf[client_data_ptr->in_buf_cur] = '\0';
     
     char * sep = NULL;
-    if((sep=strstr(client_data_ptr->in_buf, CRLF)) != NULL){
-        char * request_content=(char *)malloc(MAX_HEAD_SIZE);
-        memcpy(request_content, client_data_ptr->in_buf, client_data_ptr->in_buf_cur);
-        printf("");
-        client_data_ptr->in_buf_cur += 
-    }
-    
-    //fprintf(stderr, "Recv %d byte\n", client_data_ptr->in_buf_cur);
-    fprintf(stderr, "recv %d byte: %s\n", client_data_ptr->in_buf_cur, client_data_ptr->in_buf);
-    // start handle request
-    //strncpy(client_data_ptr->out_buf, client_data_ptr->in_buf, client_data_ptr->in_buf_cur);
-    //client_data_ptr->out_buf_cur += client_data_ptr->in_buf_cur;
-    // end handle request
-    
-    //fprintf(stderr, "handle_read/fd: %d\n", client_data_ptr->fd);
+    int npos=0;
+     if((sep=strstr(client_data_ptr->in_buf, CRLF)) != NULL){
+         npos = sep - client_data_ptr->in_buf;
+         char * request_content=(char *)malloc(MAX_HEAD_SIZE);
+         memcpy(request_content, client_data_ptr->in_buf, npos);
+         client_data_ptr->in_buf_cur -= npos + (int)strlen(CRLF);
+         
+         request_header_t * request = parse_request(request_content);
+         
+         //fprintf(stderr, "\nRecv %d bytes\nContent: %s\n", npos, request_content);
+     }
     
     ev.data.ptr = (void *)process_request(client_data_ptr);
     //如果设置了data.ptr，events则只返回ptr，不会返回fd
