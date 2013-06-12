@@ -30,11 +30,6 @@
 #define MAX_HEAD_SIZE 4096
 #define MAX_EVENTS 10240
 #define BUFSIZE 4096
-#define GET 0
-#define POST 1
-#define PUT 2
-#define DELETE 3
-
 
 static const char * LF = "\r\n";
 static const char * CRLF = "\r\n\r\n";
@@ -46,6 +41,23 @@ char * CONTENT_TYPE_FILED = "Content-Type: ";
 char * DATE_FILED = "Date: ";
 char * CONTENT_LENGTH_FIELD = "Content-Length: ";
 char * CONNECTION_FIELD = "Connection: ";
+
+
+typedef struct method_s {
+    char * method_name;
+    int code;
+}method_t;
+
+method_t  method_arr[] = {
+    {"GET", 1},
+    {"POST", 2},
+    {"PUT", 3},
+    {"HEAD", 4},
+    {"DELETE", 5},
+    {NULL, 0}
+};
+
+method_t * method_arr_p = method_arr;
 
 
 typedef struct request_header_s{
@@ -107,8 +119,33 @@ static void add_CRLF(char * buf){
 
 
 request_header_t * parse_request(char * buffer){
+    method_t * method_arr_p = method_arr;
+    int buffer_len;
+    char * line_tok;
+    char * str;
     request_header_t * request = (request_header_t *)malloc(sizeof(request_header_t));
-    fprintf(stderr, "\nGet request content: \n%s\n\n", buffer);
+    //fprintf(stderr, "\nGet request %d bytes: \n%s\n\n", (int)strlen(buffer), buffer);
+    buffer_len = (int)strlen(buffer);
+    char request_buffer[buffer_len];
+    strncpy(request_buffer, buffer, buffer_len);
+    line_tok = strtok(request_buffer, LF);
+    while(NULL != line_tok){
+        
+        if(!request->method){
+            while(NULL != method_arr_p->method_name){
+                if((str=strstr(line_tok, method_arr_p->method_name)) != NULL){
+                    request->method = method_arr_p->code;
+                }
+                method_arr_p++;
+            }
+        }
+        
+        fprintf(stderr, "%s\n", line_tok);
+        
+        line_tok = strtok(NULL, LF);
+    }
+    fprintf(stderr, "\nmethod: %d\n", request->method);
+    
     return request;
 }
 
@@ -261,7 +298,7 @@ static void handle_read(int client_fd, struct io_data_t * client_data_ptr){
          
          request_header_t * request = parse_request(request_content);
          
-         //fprintf(stderr, "\nRecv %d bytes\nContent: %s\n", npos, request_content);
+         //fprintf(stderr, "\nRecv %d bytes\nContent: %s\n\n", npos, request_content);
      }
     
     ev.data.ptr = (void *)process_request(client_data_ptr);
