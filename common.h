@@ -26,6 +26,33 @@
 #include <pthread.h>
 #include <errno.h>
 
+
+typedef struct response_header_s{
+    char * status;
+    char * content_type;
+    char * date;
+    char * content_length;
+    char * connecton;
+}response_header_t;
+
+
+typedef struct response_content_s{
+    char * raw;
+    int length;
+}response_content_t;
+ 
+
+struct io_data_t {
+    int fd;
+    struct sockaddr_in addr;
+    char * in_buf;
+    char * out_buf;
+    int in_buf_cur;
+    int out_buf_cur;
+    int keep_alive;
+    void * ptr;
+};
+
 typedef struct request_header_s{
     char * host;
     char * connecton;

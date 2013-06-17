@@ -15,34 +15,6 @@ char * DATE_FILED = "Date: ";
 char * CONTENT_LENGTH_FIELD = "Content-Length: ";
 char * CONNECTION_FIELD = "Connection: ";
 
-
-typedef struct response_header_s{
-    char * status;
-    char * content_type;
-    char * date;
-    char * content_length;
-    char * connecton;
-}response_header_t;
-
-
-typedef struct response_content_s{
-    char * raw;
-    int length;
-}response_content_t;
- 
-
-struct io_data_t {
-    int fd;
-    struct sockaddr_in addr;
-    char * in_buf;
-    char * out_buf;
-    int in_buf_cur;
-    int out_buf_cur;
-    int keep_alive;
-    void * ptr;
-};
-
-
 struct epoll_event ev, events[MAX_EVENTS];
 struct sockaddr_in server_addr;
 int listen_sock, conn_sock, nfds, epoll_fd;
