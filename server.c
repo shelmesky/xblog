@@ -139,37 +139,95 @@ static int create_sock(int port)
     return listen_sock;
 }
 
-static struct io_data_t * process_request(struct io_data_t * client_data_ptr){
+
+struct io_data_t * handle_index(struct io_data_t * client_data_ptr){
     
     client_data_ptr->out_buf_cur = 0;
+    struct http_request * req = (struct http_request *)client_data_ptr->ptr;
     
     if(!HTTP_1_1_SUPPORT) {
-        char * c = "hello server: ";
-        struct http_request * req = (struct http_request *)client_data_ptr->ptr;
-        char * uri = req->req_header->uri;
-        char * body = (char *)malloc(strlen(c) + strlen(uri) + 1);
-        strncat(body, c, strlen(c));
-        strncat(body, uri, strlen(uri));
-        //fprintf(stderr, "\n%s\n", body);
-        
-        response_header_t * resp_header = (response_header_t *)malloc(sizeof(response_header_t));
-        char * content_length = (char *)malloc(16);
-        sprintf(content_length, "%d", (int)strlen(body));
-        resp_header->content_length = content_length;
-        resp_header->status = "200 ok";
-        resp_header->content_type = "text/html";
-        if(req->req_body->connecton) {
-            resp_header->connecton = req->req_body->connecton;
-        }
-        response_content_t * resp_content = make_response(resp_header);
+    char * c = "handle_index: ";
+    char * uri = req->req_header->uri;
+    char * body = (char *)malloc(strlen(c) + strlen(uri) + 1);
+    strncat(body, c, strlen(c));
+    strncat(body, uri, strlen(uri));
+    //fprintf(stderr, "\n%s\n", body);
     
-        strncat(client_data_ptr->out_buf, resp_content->raw, resp_content->length);
-        client_data_ptr->out_buf_cur += resp_content->length;
-        
-        strncat(client_data_ptr->out_buf, body, strlen(body));
-        client_data_ptr->out_buf_cur += strlen(body);
-        
-        return client_data_ptr;
+    response_header_t * resp_header = (response_header_t *)malloc(sizeof(response_header_t));
+    char * content_length = (char *)malloc(16);
+    sprintf(content_length, "%d", (int)strlen(body));
+    resp_header->content_length = content_length;
+    resp_header->status = "200 ok";
+    resp_header->content_type = "text/html";
+    if(req->req_body->connecton) {
+        resp_header->connecton = req->req_body->connecton;
+    }
+    response_content_t * resp_content = make_response(resp_header);
+
+    strncat(client_data_ptr->out_buf, resp_content->raw, resp_content->length);
+    client_data_ptr->out_buf_cur += resp_content->length;
+    
+    strncat(client_data_ptr->out_buf, body, strlen(body));
+    client_data_ptr->out_buf_cur += strlen(body);
+    
+    return client_data_ptr;
+    }
+}
+
+
+urlmap_t urlmap[] = {
+    {"/", handle_index},
+    {NULL, NULL}
+};
+
+
+static struct io_data_t * send_error(struct io_data_t * client_data_ptr, int err_code)
+{
+    client_data_ptr->out_buf_cur = 0;
+    struct http_request * req = (struct http_request *)client_data_ptr->ptr;
+    
+    if(!HTTP_1_1_SUPPORT) {
+    char * body = "not found";
+    
+    response_header_t * resp_header = (response_header_t *)malloc(sizeof(response_header_t));
+    char * content_length = (char *)malloc(16);
+    sprintf(content_length, "%d", (int)strlen(body));
+    resp_header->content_length = content_length;
+    resp_header->status = "404 not_found";
+    resp_header->content_type = "text/html";
+    if(req->req_body->connecton) {
+        resp_header->connecton = req->req_body->connecton;
+    }
+    response_content_t * resp_content = make_response(resp_header);
+
+    strncat(client_data_ptr->out_buf, resp_content->raw, resp_content->length);
+    client_data_ptr->out_buf_cur += resp_content->length;
+    
+    strncat(client_data_ptr->out_buf, body, strlen(body));
+    client_data_ptr->out_buf_cur += strlen(body);
+    
+    return client_data_ptr;
+    }
+}
+
+
+static struct io_data_t * process_request(struct io_data_t * client_data_ptr){
+    
+    struct http_request * req = (struct http_request *)client_data_ptr->ptr;
+    
+    int ret;
+    urlmap_t * urlmap_p;
+    urlmap_p = urlmap;
+    while(urlmap_p->callback != NULL)
+    {
+        if((ret=memcmp(req->req_header->uri, urlmap_p->url, strlen(req->req_header->uri))) == 0)
+        {
+            return urlmap_p->callback(client_data_ptr);
+        }
+        else{
+            return send_error(client_data_ptr, 404);
+        }
+        urlmap_p++;
     }
 }
 

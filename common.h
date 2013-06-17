@@ -87,4 +87,11 @@ typedef struct keyval_s{
     struct keyval_s * next;
 } keyval_t;
 
+
+typedef struct urlmap_s{
+    char * url;
+    struct io_data_t * (*callback)(struct io_data_t *);
+} urlmap_t;
+
+
 extern struct http_request * parse(char *);
