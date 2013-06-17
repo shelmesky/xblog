@@ -1,31 +1,4 @@
-#include <sys/time.h>
-#include <sys/types.h>
-#include <ctype.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdarg.h>
-#include <string.h>
-#include <getopt.h>
-#include <unistd.h>
-#include <sys/socket.h>
-#include <sys/stat.h>
-#include <sys/mman.h>
-#include <sys/wait.h>
-#include <sys/sendfile.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netinet/tcp.h>
-#include <net/if.h>
-#include <fcntl.h>
-#include <time.h>
-#include <sys/ioctl.h>
-#include <errno.h>
-#include <assert.h>
-#include <signal.h>
-#include <sys/epoll.h>
-#include <pthread.h>
-#include <errno.h>
-
+#include "common.h"
 
 #define MAX_HEAD_SIZE 4096
 #define MAX_EVENTS 10240
@@ -41,40 +14,6 @@ char * CONTENT_TYPE_FILED = "Content-Type: ";
 char * DATE_FILED = "Date: ";
 char * CONTENT_LENGTH_FIELD = "Content-Length: ";
 char * CONNECTION_FIELD = "Connection: ";
-
-
-typedef struct method_s {
-    char * method_name;
-    int code;
-}method_t;
-
-method_t  method_arr[] = {
-    {"GET", 1},
-    {"POST", 2},
-    {"PUT", 3},
-    {"HEAD", 4},
-    {"DELETE", 5},
-    {NULL, 0}
-};
-
-method_t * method_arr_p = method_arr;
-
-
-typedef struct request_header_s{
-    int method;
-    char * uri;
-    char * version;
-    char * host;
-    char * connecton;
-    char * accept;
-    char * user_agent;
-    char * accept_encoding;
-    char * accept_charset;
-    char * cookie;
-    int content_length;
-    char * content_type;
-    char * content;
-}request_header_t;
 
 
 typedef struct response_header_s{
@@ -100,6 +39,7 @@ struct io_data_t {
     int in_buf_cur;
     int out_buf_cur;
     int keep_alive;
+    void * ptr;
 };
 
 
@@ -118,34 +58,10 @@ static void add_CRLF(char * buf){
 }
 
 
-request_header_t * parse_request(char * buffer){
-    method_t * method_arr_p = method_arr;
-    int buffer_len;
-    char * line_tok;
-    char * str;
-    request_header_t * request = (request_header_t *)malloc(sizeof(request_header_t));
-    //fprintf(stderr, "\nGet request %d bytes: \n%s\n\n", (int)strlen(buffer), buffer);
-    buffer_len = (int)strlen(buffer);
-    char request_buffer[buffer_len];
-    strncpy(request_buffer, buffer, buffer_len);
-    line_tok = strtok(request_buffer, LF);
-    while(NULL != line_tok){
-        
-        if(!request->method){
-            while(NULL != method_arr_p->method_name){
-                if((str=strstr(line_tok, method_arr_p->method_name)) != NULL){
-                    request->method = method_arr_p->code;
-                }
-                method_arr_p++;
-            }
-        }
-        
-        fprintf(stderr, "%s\n", line_tok);
-        
-        line_tok = strtok(NULL, LF);
-    }
-    fprintf(stderr, "\nmethod: %d\n", request->method);
-    
+struct http_request * parse_request(char * buffer){
+    fprintf(stderr, "\n%s\n", buffer);
+    struct http_request * request = (struct http_request *)malloc(sizeof(struct http_request));
+    request = parse(buffer);
     return request;
 }
 
@@ -252,14 +168,23 @@ static int create_sock(int port)
 static struct io_data_t * process_request(struct io_data_t * client_data_ptr){
     
     client_data_ptr->out_buf_cur = 0;
-    static char * body = "hello server";
+    
+    char * c = "Hello server: ";
+    struct http_request * req = (struct http_request *)client_data_ptr->ptr;
+    char * uri = req->req_header->uri;
+    char * body = (char *)malloc(strlen(c) + strlen(uri));
+    strncat(body, c, strlen(c));
+    strncat(body, uri, strlen(uri));
+    
     response_header_t * resp_header = (response_header_t *)malloc(sizeof(response_header_t));
     char * content_length = (char *)malloc(16);
     sprintf(content_length, "%d", (int)strlen(body));
     resp_header->content_length = content_length;
     resp_header->status = "200 OK";
     resp_header->content_type = "text/html";
-    resp_header->connecton = "keep-alive";
+    if(req->req_body->connecton) {
+        resp_header->connecton = req->req_body->connecton;
+    }
     response_content_t * resp_content = make_response(resp_header);
 
     strncat(client_data_ptr->out_buf, resp_content->raw, resp_content->length);
@@ -273,7 +198,7 @@ static struct io_data_t * process_request(struct io_data_t * client_data_ptr){
 
 
 static void handle_read(int client_fd, struct io_data_t * client_data_ptr){
-    fprintf(stderr, "handle_read called!\n");
+    //fprintf(stderr, "handle_read called!\n");
     int nread = 0;
     
     while((nread = read(client_fd, client_data_ptr->in_buf + client_data_ptr->in_buf_cur, BUFSIZE-1)) > 0) {
@@ -296,9 +221,15 @@ static void handle_read(int client_fd, struct io_data_t * client_data_ptr){
          memcpy(request_content, client_data_ptr->in_buf, npos);
          client_data_ptr->in_buf_cur -= npos + (int)strlen(CRLF);
          
-         request_header_t * request = parse_request(request_content);
+         struct http_request * req = parse_request(request_content);
+         //fprintf(stderr, "uri->%s\nmethod->%s\nversion->%s\n", req->req_header->uri, req->req_header->method, req->req_header->version);
+         //fprintf(stderr, "host->%s\nconnection->%s\naccept->%s\n", req->req_body->host, req->req_body->connecton, req->req_body->accept);
+         //fprintf(stderr, "user_agent->%s\naccept_encoding->%s\naccept_charset->%s\n", req->req_body->user_agent, req->req_body->accept_encoding, req->req_body->accept_charset);
+         //fprintf(stderr, "content_length->%s\ncookie->%s\n\n", req->req_body->content_length, req->req_body->cookie);
          
          //fprintf(stderr, "\nRecv %d bytes\nContent: %s\n\n", npos, request_content);
+         
+         client_data_ptr->ptr = (void *)req;
      }
     
     ev.data.ptr = (void *)process_request(client_data_ptr);
@@ -313,8 +244,8 @@ static void handle_read(int client_fd, struct io_data_t * client_data_ptr){
 
 
 static void handle_write(int client_fd, struct io_data_t * client_data_ptr){
-    fprintf(stderr, "handle_write called!\n"); 
-    fprintf(stderr, "Before write buffer size: %d\n", client_data_ptr->out_buf_cur);
+    //fprintf(stderr, "handle_write called!\n"); 
+    //fprintf(stderr, "Before write buffer size: %d\n", client_data_ptr->out_buf_cur);
     int nwrite;
     while(client_data_ptr->out_buf_cur >0){
         nwrite = write(client_fd, client_data_ptr->out_buf, client_data_ptr->out_buf_cur);
@@ -330,11 +261,14 @@ static void handle_write(int client_fd, struct io_data_t * client_data_ptr){
         }
     }
     
-    fprintf(stderr, "After write buffer size: %d\n", client_data_ptr->out_buf_cur);
+    //fprintf(stderr, "After write buffer size: %d\n", client_data_ptr->out_buf_cur);
     //fprintf(stderr, "write %d bytes: %s\n", nwrite, client_data_ptr->out_buf);
     
-    close(client_fd);
-    return;
+    struct http_request * req = (struct http_request *)client_data_ptr->ptr;
+    if(req->req_body->connecton == NULL) {
+        close(client_fd);
+        return;
+    }
     
     ev.data.ptr = client_data_ptr;
     ev.events = EPOLLIN | EPOLLET;
@@ -397,11 +331,11 @@ int main(int argc, char **argv)
         for(i=0; i<nfds && nfds>0; ++i){
             /* 如果是listen socket */
         if(events[i].data.fd == listen_sock){
-            fprintf(stderr, "listen sock!\n");
+            //fprintf(stderr, "listen sock!\n");
                 
             while((conn_sock = accept(listen_sock, (struct sockaddr *)&server_addr, (socklen_t *)&addrlen)) > 0){
                     set_nonblocking(conn_sock);
-                    fprintf(stderr, "conn_sock: %d\n", conn_sock);
+                    //fprintf(stderr, "conn_sock: %d\n", conn_sock);
                     struct io_data_t *ptr = alloc_io_data(conn_sock, (struct sockaddr_in *)NULL);
                     //fprintf(stderr, "ptr: %d\n", ptr->fd);
                     ev.data.ptr = ptr;
@@ -422,7 +356,7 @@ int main(int argc, char **argv)
                 continue;
             }
             
-            fprintf(stderr, "client sock!\n");
+            //fprintf(stderr, "client sock!\n");
             /* 如果是client socket */
             client_io_ptr = (struct io_data_t *)events[i].data.ptr;
             //fprintf(stderr, "client_io_ptr->fd: %d\n", client_io_ptr->fd);
