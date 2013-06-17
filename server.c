@@ -147,7 +147,7 @@ static struct io_data_t * process_request(struct io_data_t * client_data_ptr){
         char * c = "hello server: ";
         struct http_request * req = (struct http_request *)client_data_ptr->ptr;
         char * uri = req->req_header->uri;
-        char * body = (char *)malloc(strlen(c) + strlen(uri));
+        char * body = (char *)malloc(strlen(c) + strlen(uri) + 1);
         strncat(body, c, strlen(c));
         strncat(body, uri, strlen(uri));
         //fprintf(stderr, "\n%s\n", body);
@@ -215,8 +215,9 @@ static void handle_read(int client_fd, struct io_data_t * client_data_ptr){
 
 
 static void handle_write(int client_fd, struct io_data_t * client_data_ptr){
+    fprintf(stderr, "write buf length: %d\n", (int)strlen(client_data_ptr->out_buf)); 
     //fprintf(stderr, "handle_write called!\n"); 
-    fprintf(stderr, "Before write buffer size: %d\n", client_data_ptr->out_buf_cur);
+    //fprintf(stderr, "Before write buffer size: %d\n", client_data_ptr->out_buf_cur);
     int nwrite;
     while(client_data_ptr->out_buf_cur >0){
         nwrite = write(client_fd, client_data_ptr->out_buf, client_data_ptr->out_buf_cur);
