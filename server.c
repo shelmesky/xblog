@@ -3,11 +3,13 @@
 #define MAX_HEAD_SIZE 4096
 #define MAX_EVENTS 10240
 #define BUFSIZE 4096
+#define HTTP_1_1_SUPPORT 0
 
 static const char * LF = "\r\n";
 static const char * CRLF = "\r\n\r\n";
 
-char * HTTP_VERSION = "HTTP/1.1 ";
+char * HTTP_1_0_VERSION = "HTTP/1.0 ";
+char * HTTP_1_1_VERSION = "HTTP/1.1 ";
 char * SERVER_NAME_FILED = "Server: ";
 char * SERVER_NAME = "Xblog Server 1.0";
 char * CONTENT_TYPE_FILED = "Content-Type: ";
@@ -31,7 +33,7 @@ static void add_CRLF(char * buf){
 
 
 struct http_request * parse_request(char * buffer){
-    fprintf(stderr, "\n%s\n", buffer);
+    //fprintf(stderr, "\n%s\n", buffer);
     struct http_request * request = (struct http_request *)malloc(sizeof(struct http_request));
     request = parse(buffer);
     return request;
@@ -43,7 +45,7 @@ response_content_t * make_response(response_header_t * resp_header){
     response_content_t * resp_content = (response_content_t *)malloc(sizeof(response_content_t));
     char * content_length_str = (char *)malloc(sizeof(char));
     
-    strcat(resp, HTTP_VERSION);
+    strcat(resp, HTTP_1_1_VERSION);
     strcat(resp, resp_header->status);
     add_LF(resp);
     
@@ -141,31 +143,34 @@ static struct io_data_t * process_request(struct io_data_t * client_data_ptr){
     
     client_data_ptr->out_buf_cur = 0;
     
-    char * c = "Hello server: ";
-    struct http_request * req = (struct http_request *)client_data_ptr->ptr;
-    char * uri = req->req_header->uri;
-    char * body = (char *)malloc(strlen(c) + strlen(uri));
-    strncat(body, c, strlen(c));
-    strncat(body, uri, strlen(uri));
+    if(!HTTP_1_1_SUPPORT) {
+        char * c = "hello server: ";
+        struct http_request * req = (struct http_request *)client_data_ptr->ptr;
+        char * uri = req->req_header->uri;
+        char * body = (char *)malloc(strlen(c) + strlen(uri));
+        strncat(body, c, strlen(c));
+        strncat(body, uri, strlen(uri));
+        //fprintf(stderr, "\n%s\n", body);
+        
+        response_header_t * resp_header = (response_header_t *)malloc(sizeof(response_header_t));
+        char * content_length = (char *)malloc(16);
+        sprintf(content_length, "%d", (int)strlen(body));
+        resp_header->content_length = content_length;
+        resp_header->status = "200 ok";
+        resp_header->content_type = "text/html";
+        if(req->req_body->connecton) {
+            resp_header->connecton = req->req_body->connecton;
+        }
+        response_content_t * resp_content = make_response(resp_header);
     
-    response_header_t * resp_header = (response_header_t *)malloc(sizeof(response_header_t));
-    char * content_length = (char *)malloc(16);
-    sprintf(content_length, "%d", (int)strlen(body));
-    resp_header->content_length = content_length;
-    resp_header->status = "200 OK";
-    resp_header->content_type = "text/html";
-    if(req->req_body->connecton) {
-        resp_header->connecton = req->req_body->connecton;
+        strncat(client_data_ptr->out_buf, resp_content->raw, resp_content->length);
+        client_data_ptr->out_buf_cur += resp_content->length;
+        
+        strncat(client_data_ptr->out_buf, body, strlen(body));
+        client_data_ptr->out_buf_cur += strlen(body);
+        
+        return client_data_ptr;
     }
-    response_content_t * resp_content = make_response(resp_header);
-
-    strncat(client_data_ptr->out_buf, resp_content->raw, resp_content->length);
-    client_data_ptr->out_buf_cur += resp_content->length;
-    
-    strncat(client_data_ptr->out_buf, body, strlen(body));
-    client_data_ptr->out_buf_cur += strlen(body);
-    
-    return client_data_ptr;
 }
 
 
@@ -211,7 +216,7 @@ static void handle_read(int client_fd, struct io_data_t * client_data_ptr){
 
 static void handle_write(int client_fd, struct io_data_t * client_data_ptr){
     //fprintf(stderr, "handle_write called!\n"); 
-    //fprintf(stderr, "Before write buffer size: %d\n", client_data_ptr->out_buf_cur);
+    fprintf(stderr, "Before write buffer size: %d\n", client_data_ptr->out_buf_cur);
     int nwrite;
     while(client_data_ptr->out_buf_cur >0){
         nwrite = write(client_fd, client_data_ptr->out_buf, client_data_ptr->out_buf_cur);
@@ -227,11 +232,12 @@ static void handle_write(int client_fd, struct io_data_t * client_data_ptr){
         }
     }
     
+    //fprintf(stderr, "\n\n%s\n\n", client_data_ptr->out_buf);
     //fprintf(stderr, "After write buffer size: %d\n", client_data_ptr->out_buf_cur);
+    //fprintf(stderr, "write %d bytes\n", nwrite);
     //fprintf(stderr, "write %d bytes: %s\n", nwrite, client_data_ptr->out_buf);
     
-    struct http_request * req = (struct http_request *)client_data_ptr->ptr;
-    if(req->req_body->connecton == NULL) {
+    if(!HTTP_1_1_SUPPORT) {
         close(client_fd);
         return;
     }
