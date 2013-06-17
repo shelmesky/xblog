@@ -222,12 +222,6 @@ static void handle_read(int client_fd, struct io_data_t * client_data_ptr){
          client_data_ptr->in_buf_cur -= npos + (int)strlen(CRLF);
          
          struct http_request * req = parse_request(request_content);
-         //fprintf(stderr, "uri->%s\nmethod->%s\nversion->%s\n", req->req_header->uri, req->req_header->method, req->req_header->version);
-         //fprintf(stderr, "host->%s\nconnection->%s\naccept->%s\n", req->req_body->host, req->req_body->connecton, req->req_body->accept);
-         //fprintf(stderr, "user_agent->%s\naccept_encoding->%s\naccept_charset->%s\n", req->req_body->user_agent, req->req_body->accept_encoding, req->req_body->accept_charset);
-         //fprintf(stderr, "content_length->%s\ncookie->%s\n\n", req->req_body->content_length, req->req_body->cookie);
-         
-         //fprintf(stderr, "\nRecv %d bytes\nContent: %s\n\n", npos, request_content);
          
          client_data_ptr->ptr = (void *)req;
      }
