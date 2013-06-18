@@ -94,4 +94,5 @@ typedef struct urlmap_s{
 } urlmap_t;
 
 
+extern void LOG(struct http_request *, struct sockaddr_in);
 extern struct http_request * parse(char *);

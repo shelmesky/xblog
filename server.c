@@ -257,6 +257,7 @@ static void handle_read(int client_fd, struct io_data_t * client_data_ptr){
          client_data_ptr->in_buf_cur -= npos + (int)strlen(CRLF);
          
          struct http_request * req = parse_request(request_content);
+         LOG(req, client_data_ptr->addr);
          
          client_data_ptr->ptr = (void *)req;
      }
@@ -273,7 +274,7 @@ static void handle_read(int client_fd, struct io_data_t * client_data_ptr){
 
 
 static void handle_write(int client_fd, struct io_data_t * client_data_ptr){
-    fprintf(stderr, "write buf length: %d\n", (int)strlen(client_data_ptr->out_buf)); 
+    //fprintf(stderr, "write buf length: %d\n", (int)strlen(client_data_ptr->out_buf)); 
     //fprintf(stderr, "handle_write called!\n"); 
     //fprintf(stderr, "Before write buffer size: %d\n", client_data_ptr->out_buf_cur);
     int nwrite;
@@ -326,6 +327,7 @@ int main(int argc, char **argv)
     //int port = atoi(argv[1]);
     int port = 1234;
     int i, addrlen, client_fd;
+    struct sockaddr_in client_addr;
     struct io_data_t *client_io_ptr;
     
     signal(SIGPIPE, SIG_IGN);
@@ -364,10 +366,10 @@ int main(int argc, char **argv)
         if(events[i].data.fd == listen_sock){
             //fprintf(stderr, "listen sock!\n");
                 
-            while((conn_sock = accept(listen_sock, (struct sockaddr *)&server_addr, (socklen_t *)&addrlen)) > 0){
+            while((conn_sock = accept(listen_sock, (struct sockaddr *)&client_addr, (socklen_t *)&addrlen)) > 0){
                     set_nonblocking(conn_sock);
                     //fprintf(stderr, "conn_sock: %d\n", conn_sock);
-                    struct io_data_t *ptr = alloc_io_data(conn_sock, (struct sockaddr_in *)NULL);
+                    struct io_data_t *ptr = alloc_io_data(conn_sock, &client_addr);
                     //fprintf(stderr, "ptr: %d\n", ptr->fd);
                     ev.data.ptr = ptr;
                     ev.events = EPOLLIN | EPOLLET;
