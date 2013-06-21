@@ -3,3 +3,6 @@ all:
 
 debug:
 	gcc -O0 -o server.run server.c parse.c utils.c -g
+
+install:
+	install server.run /usr/local/bin
