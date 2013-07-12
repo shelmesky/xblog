@@ -21,6 +21,9 @@ struct epoll_event ev, events[MAX_EVENTS];
 struct sockaddr_in server_addr;
 int listen_sock, conn_sock, nfds, epoll_fd;
 
+MYSQL mysql;
+MYSQL_RES * mysql_res = NULL;
+
 
 static void add_LF(char * buf){
     strcat(buf, LF);
@@ -34,16 +37,16 @@ static void add_CRLF(char * buf){
 
 struct http_request * parse_request(char * buffer){
     //fprintf(stderr, "\n%s\n", buffer);
-    struct http_request * request = (struct http_request *)malloc(sizeof(struct http_request));
+    struct http_request * request = (struct http_request *)calloc(1, sizeof(struct http_request));
     request = parse(buffer);
     return request;
 }
 
 
 response_content_t * make_response(response_header_t * resp_header){
-    char * resp = (char *)malloc(MAX_HEAD_SIZE);
-    response_content_t * resp_content = (response_content_t *)malloc(sizeof(response_content_t));
-    char * content_length_str = (char *)malloc(sizeof(char));
+    char * resp = (char *)calloc(MAX_HEAD_SIZE, sizeof(char));
+    response_content_t * resp_content = (response_content_t *)calloc(1, sizeof(response_content_t));
+    char * content_length_str = (char *)calloc(1, sizeof(char));
     
     strcat(resp, HTTP_1_1_VERSION);
     strcat(resp, resp_header->status);
@@ -61,9 +64,15 @@ response_content_t * make_response(response_header_t * resp_header){
     strcat(resp, resp_header->content_length);
     add_LF(resp);
     
-    strcat(resp, CONNECTION_FIELD);
-    strcat(resp, resp_header->connecton);
-    add_CRLF(resp);
+    //check if has set connection header
+    if(resp_header->connecton){
+        strcat(resp, CONNECTION_FIELD);
+        strcat(resp, resp_header->connecton);
+        add_CRLF(resp);
+    }
+    else {
+        add_CRLF(resp);
+    }
     
     resp_content->raw = resp;
     resp_content->length = strlen(resp);
@@ -79,10 +88,10 @@ void exit_hook(int number){
 
 static struct io_data_t * alloc_io_data(int client_fd, struct sockaddr_in *client_addr)
 {
-    struct io_data_t * io_data_ptr = (struct io_data_t *)malloc(sizeof(struct io_data_t));
+    struct io_data_t * io_data_ptr = (struct io_data_t *)calloc(1, sizeof(struct io_data_t));
     io_data_ptr->fd = client_fd;
-    io_data_ptr->in_buf = (char *)malloc(BUFSIZE);
-    io_data_ptr->out_buf = (char *)malloc(BUFSIZE);
+    io_data_ptr->in_buf = (char *)calloc(BUFSIZE, sizeof(char));
+    io_data_ptr->out_buf = (char *)calloc(BUFSIZE, sizeof(char));
     io_data_ptr->in_buf_cur = 0;
     io_data_ptr->out_buf_cur = 0;
     io_data_ptr->keep_alive = 1;
@@ -146,21 +155,21 @@ struct io_data_t * handle_index(struct io_data_t * client_data_ptr){
     struct http_request * req = (struct http_request *)client_data_ptr->ptr;
     
     if(!HTTP_1_1_SUPPORT) {
-    char * c = "handle_index: ";
-    char * uri = req->req_header->uri;
-    char * body = (char *)malloc(strlen(c) + strlen(uri) + 1);
-    strncat(body, c, strlen(c));
-    strncat(body, uri, strlen(uri));
-    //fprintf(stderr, "\n%s\n", body);
-    
-    response_header_t * resp_header = (response_header_t *)malloc(sizeof(response_header_t));
-    char * content_length = (char *)malloc(16);
-    sprintf(content_length, "%d", (int)strlen(body));
-    resp_header->content_length = content_length;
-    resp_header->status = "200 ok";
-    resp_header->content_type = "text/html";
-    if(req->req_body->connecton) {
-        resp_header->connecton = req->req_body->connecton;
+        char * c = "handle_index: ";
+        char * uri = req->req_header->uri;
+        char * body = (char *)calloc(strlen(c) + strlen(uri) + 1, sizeof(char));
+        strncat(body, c, strlen(c));
+        strncat(body, uri, strlen(uri));
+        //fprintf(stderr, "\n%s\n", body);
+        
+        response_header_t * resp_header = (response_header_t *)calloc(1, sizeof(response_header_t));
+        char * content_length = (char *)calloc(16, sizeof(char));
+        sprintf(content_length, "%d", (int)strlen(body));
+        resp_header->content_length = content_length;
+        resp_header->status = "200 ok";
+        resp_header->content_type = "text/html";
+        if(req->req_body->connecton) {
+            resp_header->connecton = req->req_body->connecton;
     }
     response_content_t * resp_content = make_response(resp_header);
 
@@ -189,8 +198,8 @@ static struct io_data_t * send_error(struct io_data_t * client_data_ptr, int err
     if(!HTTP_1_1_SUPPORT) {
     char * body = "not found";
     
-    response_header_t * resp_header = (response_header_t *)malloc(sizeof(response_header_t));
-    char * content_length = (char *)malloc(16);
+    response_header_t * resp_header = (response_header_t *)calloc(1, sizeof(response_header_t));
+    char * content_length = (char *)calloc(16, sizeof(char));
     sprintf(content_length, "%d", (int)strlen(body));
     resp_header->content_length = content_length;
     resp_header->status = "404 not_found";
@@ -252,7 +261,7 @@ static void handle_read(int client_fd, struct io_data_t * client_data_ptr){
     int npos=0;
      if((sep=strstr(client_data_ptr->in_buf, CRLF)) != NULL){
          npos = sep - client_data_ptr->in_buf;
-         char * request_content=(char *)malloc(MAX_HEAD_SIZE);
+         char * request_content=(char *)calloc(MAX_HEAD_SIZE, sizeof(char));
          memcpy(request_content, client_data_ptr->in_buf, npos);
          client_data_ptr->in_buf_cur -= npos + (int)strlen(CRLF);
          
@@ -325,6 +334,12 @@ int main(int argc, char **argv)
     //}
     
     //int port = atoi(argv[1]);
+	//
+	char * mysql_host="127.0.0.1";
+	char * mysql_username = "root";
+	char * mysql_password = "root";
+	char * mysql_db = "xblog";
+
     int port = 1234;
     int i, addrlen, client_fd;
     struct sockaddr_in client_addr;
@@ -336,7 +351,10 @@ int main(int argc, char **argv)
     signal(SIGQUIT, exit_hook);
     signal(SIGTERM, exit_hook);
     signal(SIGHUP, exit_hook);
-    
+
+	//connect to mysql server
+	connect_mysql(&mysql, mysql_host, mysql_username, mysql_password, mysql_db);
+
     create_sock(port);
     
     if((epoll_fd = epoll_create(MAX_EVENTS)) < 0 ){

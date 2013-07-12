@@ -25,6 +25,7 @@
 #include <sys/epoll.h>
 #include <pthread.h>
 #include <errno.h>
+#include <mysql/mysql.h>
 
 
 typedef struct response_header_s{
@@ -96,3 +97,6 @@ typedef struct urlmap_s{
 
 extern void LOG(struct http_request *, struct sockaddr_in);
 extern struct http_request * parse(char *);
+extern int connect_mysql(MYSQL *, const char *, const char *, const char *, const char *);
+extern MYSQL_RES * query_mysql(MYSQL *, const char *);
+
