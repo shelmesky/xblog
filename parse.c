@@ -28,7 +28,7 @@ char * ltrim(char * buffer)
 char * rtrim(char *buf)
 {
     if(buf == NULL) return;
-    char * buffer = (char *)malloc(sizeof(buf[0]) * strlen(buf));
+    char * buffer = (char *)calloc(sizeof(buf[0]) * strlen(buf), sizeof(char));
     memcpy(buffer, buf, strlen(buf) - 1);
     char * temp = buffer;
     char * temp1;
@@ -71,7 +71,7 @@ void split_header_body(char * buffer, char *request_header, char * request_body)
 header_t * parse_header(char * buf) {
 	char * deli = " ";
 	char * sp;
-	header_t * header = (header_t *)malloc(sizeof(header_t));
+	header_t * header = (header_t *)calloc(1, sizeof(header_t));
 	sp = strtok(buf, deli);
 	header->method = sp;
 	sp = strtok(NULL, deli);
@@ -83,7 +83,7 @@ header_t * parse_header(char * buf) {
 
 
 void list_init(keyval_t ** kv_root) {
-	*kv_root = (keyval_t *)malloc(sizeof(keyval_t));
+	*kv_root = (keyval_t *)calloc(1, sizeof(keyval_t));
 	(*kv_root)->key = NULL;
 	(*kv_root)->value = NULL;
 }
@@ -169,10 +169,10 @@ struct http_request  * parse(char * buf)
 	req_header = parse_header(request_header);
 
     //parse http request body
-    request_header_t * req_body = (request_header_t *)malloc(sizeof(request_header_t));
+    request_header_t * req_body = (request_header_t *)calloc(1, sizeof(request_header_t));
 	parse_body(request_body, req_body);
 
-	struct http_request * request = (struct http_request *)malloc(sizeof(struct http_request *));
+	struct http_request * request = (struct http_request *)calloc(1, sizeof(struct http_request *));
     request->req_header = req_header;
     request->req_body = req_body;
     return request;
