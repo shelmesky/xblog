@@ -45,7 +45,7 @@ int run(void)
     }
     
     
-    TMPL_write("index.html", 0, 0, mainlist, out, stderr);
+    TMPL_write("default.html", 0, 0, mainlist, out, stderr);
     
     char buf[4096]; 
 	int read_ret;
