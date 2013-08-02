@@ -227,16 +227,18 @@ static struct io_data_t * process_request(struct io_data_t * client_data_ptr){
     int ret;
     urlmap_t * urlmap_p;
     urlmap_p = urlmap;
-    while(urlmap_p->callback != NULL)
+    while(1)
     {
-        if((ret=memcmp(req->req_header->uri, urlmap_p->url, strlen(req->req_header->uri))) == 0)
-        {
-            return urlmap_p->callback(client_data_ptr);
+        if(urlmap_p->callback != NULL) {
+            if((ret=memcmp(req->req_header->uri, urlmap_p->url, strlen(req->req_header->uri))) == 0)
+            {
+                return urlmap_p->callback(client_data_ptr);
+            }
+            urlmap_p++;
         }
         else{
             return send_error(client_data_ptr, 404);
         }
-        urlmap_p++;
     }
 }
 
