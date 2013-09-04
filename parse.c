@@ -27,7 +27,7 @@ char * ltrim(char * buffer)
 
 char * rtrim(char *buf)
 {
-    if(buf == NULL) return;
+    if(buf == NULL) return (char *)NULL;
     char * buffer = (char *)calloc(sizeof(buf[0]) * strlen(buf), sizeof(char));
     memcpy(buffer, buf, strlen(buf) - 1);
     char * temp = buffer;
